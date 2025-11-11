@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Mentor Portal</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #6a11cb, #2575fc);
+      padding: 40px;
+      color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .container {
+      max-width: 700px;
+      background: #fff;
+      padding: 30px;
+      margin: auto;
+      border-radius: 15px;
+      box-shadow: 0 10px 25px rgba(107, 209, 237, 0.15);
+      animation: fadeIn 0.5s ease;
+      text-align: center;
+    }
+    h1, h2, h3 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 10px;
+      display: block;
+      color: #444;
+      text-align: left;
+    }
+    input, textarea, select {
+      width: 100%;
+      margin: 10px 0 20px 0;
+      padding: 12px 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #2575fc;
+    }
+    input[type="radio"] {
+      width: auto;
+      margin-right: 10px;
+    }
+    input[type="password"].typing {
+      animation: pulse 0.3s;
+    }
+    button, input[type="submit"] {
+      padding: 12px 20px;
+      background: #2575fc;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+      transition: background 0.3s;
+    }
+    button:hover, input[type="submit"]:hover {
+      background: #1b5edb;
+    }
+    .chat-box {
+      height: 300px;
+      overflow-y: scroll;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      border-radius: 8px;
+    }
+    .chat-box div {
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    .avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 22px;
+      color: #333;
+      margin-right: 15px;
+    }
+    .admin-avatar { background: #ffe8b3; }
+    .mentor-avatar { background: #ffe1e1; }
+    .student-avatar { background: #e1f0ff; }
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 20px;
+    }
+    .error-message {
+      color: red;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    ul {
+      margin-left: 20px;
+      text-align: left;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); border-color: #2575fc; }
+      50% { transform: scale(1.03); border-color: #1b5edb; }
+      100% { transform: scale(1); border-color: #2575fc; }
+    }
+  </style>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, setDoc, doc,
+      getDocs, updateDoc, query, where, orderBy,
+      onSnapshot, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD35p-bA1-Vg0V8hoFj6gQ-Z8shNYZ7NBQ",
+      authDomain: "mentor-68965.firebaseapp.com",
+      projectId: "mentor-68965",
+      storageBucket: "mentor-68965.appspot.com",
+      messagingSenderId: "211613267744",
+      appId: "1:211613267744:web:806a28fae8b0ff93b50945"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const mentors = [
+      "Dr. K.A. SenthilDevi", "Dr. M. Sathyapriya", "Dr. R. Prabahari", "Ms. S. Asmabegam",
+      "Dr. V.K. Narendirakumar", "Mr. G. Prabhu", "Dr. N. Prakash", "Mrs. M. Harini"
+    ];
+
+    window.login = async () => {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const role = document.querySelector('input[name="role"]:checked')?.value;
+      const errorMessage = document.getElementById("error-message");
+
+      if (!username || !password || !role) {
+        errorMessage.textContent = "Please fill in all fields.";
+        return;
+      }
+
+      errorMessage.textContent = "";
+
+      if (role === "admin" && username === "admin" && password === "admin123") {
+        loadAdmin();
+      } else if (role === "staff") {
+        const q = query(collection(db, "staff"), where("username", "==", username), where("password", "==", password));
+        const res = await getDocs(q);
+        if (!res.empty) {
+          localStorage.setItem("role", "staff");
+          localStorage.setItem("mentor", username);
+          loadStaff();
+        } else {
+          errorMessage.textContent = "Invalid staff credentials.";
+        }
+      } else if (role === "student") {
+        const q = query(collection(db, "students"), where("username", "==", username), where("password", "==", password));
+        const res = await getDocs(q);
+        if (!res.empty) {
+          const data = res.docs[0].data();
+          localStorage.setItem("role", "student");
+          localStorage.setItem("student", data.username);
+          localStorage.setItem("mentor", data.mentor);
+          loadStudent();
+        } else {
+          errorMessage.textContent = "Invalid student credentials.";
+        }
+      }
+    };
+
+    window.logout = () => {
+      localStorage.clear();
+      if (window.unsubscribe) window.unsubscribe();
+      location.reload();
+    };
+
+    function loadAdmin() {
+      const mentorInputs = mentors.map((m, i) => `
+        <label>${m} (Limit):</label>
+        <input type="number" id="limit-${i}" min="0" value="3">
+      `).join("");
+
+      document.body.innerHTML = `
+        <div class="container">
+          <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+            <div class="avatar admin-avatar">A</div>
+            <h1>Admin Panel</h1>
+
+<h3>Manage Mentors</h3>
+<input id="newMentorInput" placeholder="Enter new mentor name">
+<button onclick="addMentor()">Add Mentor</button><br><br>
+<select id="mentorSelect"></select>
+<button onclick="deleteMentor()">Delete Selected Mentor</button>
+<hr>
+
+          </div>
+          <button onclick="logout()">Logout</button>
+          <h3>Set Total Students and Per-Mentor Limit</h3>
+          <label>Enter Total Number of Students:</label>
+          <input id="totalStudents" type="number" min="1" placeholder="e.g. 24">
+          <button onclick="autoDistribute()">Distribute to Mentors</button>
+          ${mentorInputs}
+          <label>Paste student names (one per line):</label>
+          <textarea id="students" rows="10" placeholder="Enter student names..."></textarea>
+          <button onclick="shuffleStudents()">Shuffle & Assign</button>
+          <button onclick="finalizeAssignment()">Finalize</button>
+          <div id="assigned"></div>
+        </div>
+      `;
+    }
+
+    window.autoDistribute = () => {
+      const total = parseInt(document.getElementById("totalStudents").value);
+      if (!total || total <= 0) {
+        alert("Please enter a valid total number");
+        return;
+      }
+
+      const base = Math.floor(total / mentors.length);
+      let remainder = total % mentors.length;
+
+      mentors.forEach((_, i) => {
+        const val = base + (remainder > 0 ? 1 : 0);
+        document.getElementById(`limit-${i}`).value = val;
+        remainder--;
+      });
+    };
+
+    window.shuffleStudents = () => {
+      const raw = document.getElementById("students").value.trim();
+      if (!raw) {
+        alert("Enter student names");
+        return;
+      }
+
+      const names = raw.split("\n").map(x => x.trim()).filter(Boolean);
+      const mentorLimits = mentors.map((_, i) => parseInt(document.getElementById(`limit-${i}`).value) || 0);
+      const totalCapacity = mentorLimits.reduce((a, b) => a + b, 0);
+
+      if (names.length > totalCapacity) {
+        alert(`Too many students! Max allowed is ${totalCapacity} based on current mentor limits.`);
+        return;
+      }
+
+      for (let i = names.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [names[i], names[j]] = [names[j], names[i]];
+      }
+
+      const previous = JSON.parse(localStorage.getItem("assignment") || "{}");
+      const assignment = {};
+      mentors.forEach((m, i) => assignment[m] = []);
+
+      for (const name of names) {
+        let assigned = false;
+        for (let i = 0; i < mentors.length; i++) {
+          const mentor = mentors[i];
+          const limit = mentorLimits[i];
+          const alreadyHad = previous[mentor]?.includes(name);
+          if (!alreadyHad && assignment[mentor].length < limit) {
+            assignment[mentor].push(name);
+            assigned = true;
+            break;
+          }
+        }
+
+        if (!assigned) {
+          for (let i = 0; i < mentors.length; i++) {
+            const mentor = mentors[i];
+            if (assignment[mentor].length < mentorLimits[i]) {
+              assignment[mentor].push(name);
+              break;
+            }
+          }
+        }
+      }
+
+      localStorage.setItem("assignment", JSON.stringify(assignment));
+      displayAssignment(assignment);
+    };
+
+    function displayAssignment(assignment) {
+      const div = document.getElementById("assigned");
+      div.innerHTML = "";
+      Object.entries(assignment).forEach(([mentor, students]) => {
+        div.innerHTML += `<h3>${mentor}</h3><ul>${students.map(s => `<li>${s}</li>`).join('')}</ul>`;
+      });
+    }
+
+    window.finalizeAssignment = async () => {
+      const assignment = JSON.parse(localStorage.getItem("assignment") || "{}");
+      for (const mentor in assignment) {
+        await setDoc(doc(db, "staff", mentor), {
+          username: mentor,
+          password: mentor.toLowerCase().split(" ")[1] + "123"
+        });
+        for (const student of assignment[mentor]) {
+          const uname = student.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.floor(100 + Math.random() * 900);
+          const pword = "pass" + Math.floor(1000 + Math.random() * 9000);
+          await addDoc(collection(db, "students"), {
+            name: student,
+            username: uname,
+            password: pword,
+            mentor: mentor
+          });
+        }
+      }
+      alert("Finalized and saved to database.");
+    };
+
+    async function loadStaff() {
+      const mentor = localStorage.getItem("mentor");
+      document.body.innerHTML = `
+        <div class="container">
+          <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+            <div class="avatar mentor-avatar">M</div>
+            <h1>Mentor: ${mentor}</h1>
+          </div>
+          <button onclick="logout()">Logout</button>
+          <h3>Students</h3>
+          <div id="studentTabs"></div>
+          
+<label>Upload Project Code (.zip, .js, etc):</label>
+<input type="file" id="codeFileInput" accept=".zip,.js,.py,.cpp,.c,.java">
+<label>Upload Project Documentation (.pdf):</label>
+<input type="file" id="docFileInput" accept=".pdf">
+<button onclick="uploadFiles()">Upload Files</button>
+
+<div id="chatBox" class="chat-box"></div>
+          <input id="chatInput" placeholder="Type a message..." style="display:none;">
+          <button onclick="sendMessage()" id="sendBtn" style="display:none;">Send</button>
+        </div>
+      `;
+
+      const q = query(collection(db, "students"), where("mentor", "==", mentor));
+      const res = await getDocs(q);
+      const tabDiv = document.getElementById("studentTabs");
+
+      for (const docSnap of res.docs) {
+        const student = docSnap.data().username;
+        const projQ = query(collection(db, "projects"), where("student", "==", student));
+        const projSnap = await getDocs(projQ);
+        const title = !projSnap.empty ? projSnap.docs[0].data().title : "No Title Yet";
+
+        const btn = document.createElement("button");
+        btn.innerHTML = `<strong>${student}</strong><br><small>${title}</small>`;
+        btn.style.margin = "5px";
+        btn.onclick = () => openChat(student);
+        tabDiv.appendChild(btn);
+      }
+    }
+
+    window.openChat = (student) => {
+      const mentor = localStorage.getItem("mentor");
+      localStorage.setItem("activeStudent", student);
+      if (window.unsubscribe) window.unsubscribe();
+      const chatBox = document.getElementById("chatBox");
+      const input = document.getElementById("chatInput");
+      const sendBtn = document.getElementById("sendBtn");
+      chatBox.innerHTML = `<p><em>Loading chat with ${student}...</em></p>`;
+      input.style.display = "block";
+      sendBtn.style.display = "inline-block";
+      const q = query(
+        collection(db, "chat"),
+        where("mentor", "==", mentor),
+        where("student", "==", student),
+        orderBy("sentAt")
+      );
+      window.unsubscribe = onSnapshot(q, (snapshot) => {
+        chatBox.innerHTML = "";
+        snapshot.forEach(doc => {
+          const m = doc.data();
+          chatBox.innerHTML += `<div><strong>${m.sender}:</strong> ${m.text}</div>`;
+        });
+        chatBox.scrollTop = chatBox.scrollHeight;
+      });
+    };
+
+    async function loadStudent() {
+      const student = localStorage.getItem("student");
+      const mentor = localStorage.getItem("mentor");
+
+      const q = query(collection(db, "projects"), where("student", "==", student));
+      const res = await getDocs(q);
+
+      let submitted = false;
+      let title = "", description = "";
+
+      if (!res.empty) {
+        submitted = true;
+        const data = res.docs[0].data();
+        title = data.title;
+        description = data.description;
+      }
+
+      document.body.innerHTML = `
+        <div class="container">
+          <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+            <div class="avatar student-avatar">S</div>
+            <h1>Student: ${student}</h1>
+          </div>
+          <p><strong>Mentor:</strong> ${mentor}</p>
+          ${submitted ? `
+            <p><strong>Project Title:</strong> ${title}</p>
+            <p><strong>Description:</strong> ${description}</p>
+          ` : `
+            <label>Project Title (must be unique):</label>
+            <input id="projectTitleInput" placeholder="e.g. Smart Farming System">
+            <label>Project Description (must be unique):</label>
+            <textarea id="projectDescInput" placeholder="Describe your project here..."></textarea>
+            <button onclick="submitProjectTitle()">Submit Project</button>
+          `}
+          
+<label>Upload Project Code (.zip, .js, etc):</label>
+<input type="file" id="codeFileInput" accept=".zip,.js,.py,.cpp,.c,.java">
+<label>Upload Project Documentation (.pdf):</label>
+<input type="file" id="docFileInput" accept=".pdf">
+<button onclick="uploadFiles()">Upload Files</button>
+
+<div id="chatBox" class="chat-box"></div>
+          <input id="chatInput" placeholder="Type a message...">
+          <button onclick="sendMessage()">Send</button>
+          <button onclick="logout()" style="margin-top:20px;">Logout</button>
+        </div>
+      `;
+
+      const chatQ = query(
+        collection(db, "chat"),
+        where("mentor", "==", mentor),
+        where("student", "==", student),
+        orderBy("sentAt")
+      );
+      window.unsubscribe = onSnapshot(chatQ, (snapshot) => {
+        const box = document.getElementById("chatBox");
+        box.innerHTML = "";
+        snapshot.forEach(doc => {
+          const m = doc.data();
+          box.innerHTML += `<div><strong>${m.sender}:</strong> ${m.text}</div>`;
+        });
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+
+    window.submitProjectTitle = async () => {
+      const title = document.getElementById("projectTitleInput")?.value.trim();
+      const description = document.getElementById("projectDescInput")?.value.trim();
+      const student = localStorage.getItem("student");
+      const mentor = localStorage.getItem("mentor");
+
+      if (!title || !description) {
+        alert("Please fill in both title and description.");
+        return;
+      }
+
+      const titleCheck = query(collection(db, "projects"), where("title", "==", title));
+      const titleRes = await getDocs(titleCheck);
+      if (!titleRes.empty) {
+        alert("Project title already used. Choose a different title.");
+        return;
+      }
+
+      const descCheck = query(collection(db, "projects"), where("description", "==", description));
+      const descRes = await getDocs(descCheck);
+      if (!descRes.empty) {
+        alert("Project description already used. Try a different description.");
+        return;
+      }
+
+      await addDoc(collection(db, "projects"), {
+        student,
+        mentor,
+        title,
+        description,
+        submittedAt: serverTimestamp()
+      });
+
+      alert("Project submitted successfully!");
+      loadStudent();
+    };
+
+    window.sendMessage = async () => {
+      const text = document.getElementById("chatInput").value.trim();
+      if (!text) return;
+      const role = localStorage.getItem("role");
+      const mentor = localStorage.getItem("mentor");
+      const student = role === "student" ? localStorage.getItem("student") : localStorage.getItem("activeStudent");
+      const sender = role === "student" ? student : mentor;
+      await addDoc(collection(db, "chat"), {
+        mentor,
+        student,
+        sender,
+        text,
+        sentAt: serverTimestamp()
+      });
+      document.getElementById("chatInput").value = "";
+    };
+
+    
+window.uploadFiles = async () => {
+  const student = localStorage.getItem("student");
+  const codeFile = document.getElementById("codeFileInput").files[0];
+  const docFile = document.getElementById("docFileInput").files[0];
+
+  if (!codeFile && !docFile) {
+    alert("Please select at least one file to upload.");
+    return;
+  }
+
+  const storage = getStorage();
+
+  const uploads = [];
+
+  if (codeFile) {
+    const codeRef = ref(storage, `projects/${student}/code_${codeFile.name}`);
+    uploads.push(uploadBytes(codeRef, codeFile).then(() => getDownloadURL(codeRef)));
+  }
+
+  if (docFile) {
+    const docRef = ref(storage, `projects/${student}/doc_${docFile.name}`);
+    uploads.push(uploadBytes(docRef, docFile).then(() => getDownloadURL(docRef)));
+  }
+
+  const urls = await Promise.all(uploads);
+  alert("Upload successful! Files stored in Firebase Storage.");
+};
+
+function updateMentorDropdown() {
+  const sel = document.getElementById("mentorSelect");
+  if (!sel) return;
+  sel.innerHTML = mentors.map(m => `<option value="${m}">${m}</option>`).join("");
+}
+
+window.addMentor = () => {
+  const name = document.getElementById("newMentorInput").value.trim();
+  if (!name) return alert("Enter a mentor name.");
+  if (mentors.includes(name)) return alert("Mentor already exists.");
+  mentors.push(name);
+  updateMentorDropdown();
+  alert("Mentor added!");
+};
+
+window.deleteMentor = () => {
+  const sel = document.getElementById("mentorSelect");
+  const name = sel.value;
+  if (!name) return alert("Select a mentor to delete.");
+  if (!confirm("Are you sure you want to delete " + name + "?")) return;
+  mentors = mentors.filter(m => m !== name);
+  updateMentorDropdown();
+  alert("Mentor deleted.");
+};
+
+const originalLoadAdmin = loadAdmin;
+window.loadAdmin = () => {
+  originalLoadAdmin();
+  setTimeout(updateMentorDropdown, 500);
+};
+
+window.finalizeAssignment = async () => {
+  const assignment = JSON.parse(localStorage.getItem("assignment") || "{}");
+  const excelData = [["Mentor", "Student Name", "Username", "Password"]];
+
+  for (const mentor in assignment) {
+    await setDoc(doc(db, "staff", mentor), {
+      username: mentor,
+      password: mentor.toLowerCase().split(" ")[1] + "123"
+    });
+
+    for (const student of assignment[mentor]) {
+      const uname = student.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.floor(100 + Math.random() * 900);
+      const pword = "pass" + Math.floor(1000 + Math.random() * 9000);
+
+      await addDoc(collection(db, "students"), {
+        name: student,
+        username: uname,
+        password: pword,
+        mentor: mentor
+      });
+
+      excelData.push([mentor, student, uname, pword]);
+    }
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(excelData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Finalized Assignment");
+
+  const date = new Date().toISOString().split("T")[0];
+  XLSX.writeFile(wb, `Mentor_Assignment_${date}.xlsx`);
+
+  alert("Finalized and downloaded Excel sheet.");
+};
+
+
+document.addEventListener("DOMContentLoaded", () => {
+      const passInput = document.getElementById("password");
+      if (passInput) {
+        passInput.addEventListener("input", () => {
+          passInput.classList.add("typing");
+          setTimeout(() => passInput.classList.remove("typing"), 300);
+        });
+      }
+    });
+  </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+      <div class="avatar admin-avatar">A</div>
+      <h1>Login to Project Mentor Portal</h1>
+    </div>
+    <form id="loginForm" onsubmit="event.preventDefault(); login();">
+      <label for="username">Username</label>
+      <input id="username" placeholder="Enter your username" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="Enter password" required>
+      <label>Role</label>
+      <div class="radio-group">
+        <label><input type="radio" name="role" value="admin" checked> Admin</label>
+        <label><input type="radio" name="role" value="staff"> Staff</label>
+        <label><input type="radio" name="role" value="student"> Student</label>
+      </div>
+      <input type="submit" value="Login">
+    </form>
+    <div id="error-message" class="error-message"></div>
+  </div>
+</body>
+</html>
